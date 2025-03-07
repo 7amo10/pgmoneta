@@ -27,6 +27,7 @@
  */
 
 #include <art.h>
+#include <logging.h>
 #include <utils.h>
 
 #include <stdbool.h>
@@ -331,11 +332,51 @@ pgmoneta_art_destroy(struct art* tree)
 uintptr_t
 pgmoneta_art_search(struct art* t, char* key)
 {
+#ifdef DEBUG
+   char* vs = NULL;
+   struct value* v = NULL;
+   bool found = true;
+
+   if (t == NULL)
+   {
+      pgmoneta_log_error("pgmoneta_art_search: ART is NULL");
+      found = false;
+   }
+
+   if (key == NULL)
+   {
+      pgmoneta_log_error("pgmoneta_art_search: %p NULL", t);
+      found = false;
+   }
+   else if (!strcmp(key, ""))
+   {
+      pgmoneta_log_error("pgmoneta_art_search: %p \"\"", t);
+      found = false;
+   }
+   else if (!pgmoneta_art_contains_key(t, key))
+   {
+      pgmoneta_log_trace("pgmoneta_art_search: %p %s", t, key);
+      found = false;
+   }
+
+   if (found)
+   {
+      v = art_search(t, (unsigned char*)key, strlen(key) + 1);
+      vs = pgmoneta_value_to_string(v, FORMAT_TEXT, NULL, 0);
+      pgmoneta_log_trace("pgmoneta_art_search: %p %s -> %s (%s)", t, key, vs, pgmoneta_value_type_to_string(v->type));
+      free(vs);
+   }
+#endif
+
+   struct value* val = NULL;
+
    if (t == NULL || key == NULL)
    {
       return false;
    }
-   struct value* val = art_search(t, (unsigned char*)key, strlen(key)+1);
+
+   val = art_search(t, (unsigned char*)key, strlen(key) + 1);
+
    return pgmoneta_value_data(val);
 }
 
@@ -346,7 +387,7 @@ pgmoneta_art_contains_key(struct art* t, char* key)
    {
       return false;
    }
-   struct value* val = art_search(t, (unsigned char*)key, strlen(key)+1);
+   struct value* val = art_search(t, (unsigned char*)key, strlen(key) + 1);
    return val != NULL;
 }
 
@@ -355,12 +396,42 @@ pgmoneta_art_insert(struct art* t, char* key, uintptr_t value, enum value_type t
 {
    struct value* old_val = NULL;
    bool new = false;
+
+#ifdef DEBUG
+   char* vs = NULL;
+   struct value* v = NULL;
+
+   if (t == NULL)
+   {
+      pgmoneta_log_debug("pgmoneta_art_insert: ART is NULL");
+   }
+
+   if (pgmoneta_art_contains_key(t, key))
+   {
+      pgmoneta_log_debug("pgmoneta_art_insert: Key exists: %s", key);
+   }
+
+   pgmoneta_value_create(pgmoneta_value_to_ref(type), value, &v);
+   vs = pgmoneta_value_to_string(v, FORMAT_TEXT, NULL, 0);
+   if (key == NULL)
+   {
+      pgmoneta_log_trace("pgmoneta_art_insert: %p %s (%s)", t, vs, pgmoneta_value_type_to_string(type));
+   }
+   else
+   {
+      pgmoneta_log_trace("pgmoneta_art_insert: %p %s -> %s (%s)", t, key, vs, pgmoneta_value_type_to_string(type));
+   }
+
+   free(vs);
+   pgmoneta_value_destroy(v);
+#endif
+
    if (t == NULL || key == NULL)
    {
       // c'mon, at least create a tree first...
       goto error;
    }
-   old_val = art_node_insert(t->root, &t->root, 0, (unsigned char*)key, strlen(key)+1, value, type, NULL, &new);
+   old_val = art_node_insert(t->root, &t->root, 0, (unsigned char*)key, strlen(key) + 1, value, type, NULL, &new);
    pgmoneta_value_destroy(old_val);
    if (new)
    {
@@ -380,7 +451,7 @@ pgmoneta_art_insert_with_config(struct art* t, char* key, uintptr_t value, struc
    {
       goto error;
    }
-   old_val = art_node_insert(t->root, &t->root, 0, (unsigned char*)key, strlen(key)+1, value, ValueRef, config, &new);
+   old_val = art_node_insert(t->root, &t->root, 0, (unsigned char*)key, strlen(key) + 1, value, ValueRef, config, &new);
    pgmoneta_value_destroy(old_val);
    if (new)
    {
@@ -399,7 +470,7 @@ pgmoneta_art_delete(struct art* t, char* key)
    {
       return 1;
    }
-   l = art_node_delete(t->root, &t->root, 0, (unsigned char*)key, strlen(key)+1);
+   l = art_node_delete(t->root, &t->root, 0, (unsigned char*)key, strlen(key) + 1);
    t->size--;
    pgmoneta_value_destroy(l->value);
    free(l);
@@ -1701,7 +1772,7 @@ to_text_string(struct art* t, char* tag, int indent)
    }
    if (t == NULL || t->size == 0)
    {
-      ret = pgmoneta_append(ret, "{}");
+      ret = pgmoneta_append(ret, "");
       return ret;
    }
    struct to_string_param param = {

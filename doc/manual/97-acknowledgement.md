@@ -7,7 +7,7 @@
 [**pgmoneta**][pgmoneta] was created by the following authors:
 
 ```
-Jesper Pedersen <jesper.pedersen@comcast.net>
+Jesper Pedersen <jesperpedersen.db@gmail.com>
 David Fetter <david@fetter.org>
 Will Leinweber <will@bitfission.com>
 Luca Ferrari <fluca1978@gmail.com>
@@ -32,12 +32,13 @@ Annupamaa <annu242005@gmail.com>
 Ashutosh Sharma <ash2003sharma@gmail.com>
 Mohab Yaser <mohabyaserofficial2003@gmail.com>
 Georg Pfuetzenreuter <mail@georg-pfuetzenreuter.net>
+Ahmed Ashour <a8087027@gmail.com>
 ```
 
 ## Committers
 
 ```
-Jesper Pedersen <jesper.pedersen@comcast.net>
+Jesper Pedersen <jesperpedersen.db@gmail.com>
 Haoran Zhang <andrewzhr9911@gmail.com>
 ```
 
