@@ -77,10 +77,10 @@ extern "C" {
 #define NODE_TARGET_FILE       "target_file"       /* The target file */
 #define NODE_TARGET_ROOT       "target_root"       /* The target root directory */
 
-typedef char* (*name)(void);
-typedef int (*setup)(char*, struct art*);
-typedef int (*execute)(char*, struct art*);
-typedef int (*teardown)(char*, struct art*);
+typedef char* (* name)(void);
+typedef int (* setup)(char*, struct art*);
+typedef int (* execute)(char*, struct art*);
+typedef int (* teardown)(char*, struct art*);
 
 /** @struct workflow
  * Defines a workflow
