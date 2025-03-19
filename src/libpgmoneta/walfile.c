@@ -39,55 +39,103 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+/**
+ * Validate if a WAL file exists and is accessible before processing.
+ * Returns PGMONETA_WAL_SUCCESS if valid, otherwise an error code.
+ */
+static int
+pgmoneta_validate_wal_file(const char* path)
+{
+   if (!pgmoneta_is_file((char*)path))
+   {
+      pgmoneta_log_error("WAL file does not exist: %s", path);
+      return PGMONETA_WAL_ERR_IO;
+   }
+
+   FILE* file = fopen(path, "rb");
+   if (!file)
+   {
+      pgmoneta_log_error("Failed to open WAL file: %s", path);
+      return PGMONETA_WAL_ERR_IO;
+   }
+   fclose(file);
+   return PGMONETA_WAL_SUCCESS;
+}
+
 int
 pgmoneta_read_walfile(int server, char* path, struct walfile** wf)
 {
    struct walfile* new_wf = NULL;
 
+   int validation_status = pgmoneta_validate_wal_file(path);
+   if (validation_status != PGMONETA_WAL_SUCCESS)
+   {
+      return validation_status;
+   }
+
    new_wf = malloc(sizeof(struct walfile));
    if (new_wf == NULL)
    {
-      goto error;
+      pgmoneta_log_error("Memory allocation failed for WAL file structure");
+      return PGMONETA_WAL_ERR_MEMORY;
    }
 
    if (pgmoneta_deque_create(false, &new_wf->records) || pgmoneta_deque_create(false, &new_wf->page_headers))
    {
-      goto error;
+      pgmoneta_log_error("Failed to initialize WAL deque structures");
+      free(new_wf);
+      return PGMONETA_WAL_ERR_MEMORY;
    }
 
    if (pgmoneta_wal_parse_wal_file(path, server, new_wf))
    {
-      goto error;
+      pgmoneta_log_error("Failed to parse WAL file: %s", path);
+      pgmoneta_destroy_walfile(new_wf);
+      return PGMONETA_WAL_ERR_FORMAT;
    }
 
    *wf = new_wf;
 
-   return 0;
+   return PGMONETA_WAL_SUCCESS;
 
-error:
-   return 1;
 }
 
 int
 pgmoneta_write_walfile(struct walfile* wf, int server, char* path)
 {
+   if (!wf || !path)
+   {
+      pgmoneta_log_error("Invalid parameters provided to pgmoneta_write_walfile");
+      return PGMONETA_WAL_ERR_PARAM;
+   }
+
    struct deque_iterator* record_iterator = NULL;
    struct xlog_page_header_data* page_header = NULL;
    struct deque_iterator* page_header_iterator = NULL;
-   FILE* file = NULL;
 
-   file = fopen(path, "wb");
-   if (file == NULL)
+   FILE* file = fopen(path, "wb");
+   if (!file)
    {
-      goto error;
+      pgmoneta_log_error("Unable to open WAL file for writing: %s", path);
+      return PGMONETA_WAL_ERR_IO;
    }
 
+   // Ensure iterators are properly created
    if (pgmoneta_deque_iterator_create(wf->page_headers, &page_header_iterator) || pgmoneta_deque_iterator_create(wf->records, &record_iterator))
    {
-      goto error;
+      pgmoneta_log_error("Failed to create WAL deque iterators for writing");
+      fclose(file);
+      return PGMONETA_WAL_ERR_MEMORY;
    }
 
-   fwrite(wf->long_phd, SIZE_OF_XLOG_LONG_PHD, 1, file);
+   if (fwrite(wf->long_phd, SIZE_OF_XLOG_LONG_PHD, 1, file) != 1)
+   {
+      pgmoneta_log_error("Failed to write WAL file header");
+      fclose(file);
+      pgmoneta_deque_iterator_destroy(page_header_iterator);
+      pgmoneta_deque_iterator_destroy(record_iterator);
+      return PGMONETA_WAL_ERR_IO;
+   }
 
    int page_number = 1;
    while (pgmoneta_deque_iterator_next(page_header_iterator))
@@ -144,15 +192,19 @@ pgmoneta_write_walfile(struct walfile* wf, int server, char* path)
 
    /* Fill the rest of the file until xlp_seg_size with zeros */
    long num_zeros = wf->long_phd->xlp_seg_size - ftell(file);
-   char* zeros = (char*)calloc(num_zeros, sizeof(char));
-   fwrite(zeros, sizeof(char), num_zeros, file);
-   free(zeros);
+   if (num_zeros > 0)
+   {
+      char* zeros = (char*)calloc(num_zeros, sizeof(char));
+      if (zeros)
+      {
+         fwrite(zeros, sizeof(char), num_zeros, file);
+         free(zeros);
+      }
+   }
 
    fclose(file);
-   return 0;
+   return PGMONETA_WAL_SUCCESS;
 
-error:
-   return 1;
 }
 
 void
